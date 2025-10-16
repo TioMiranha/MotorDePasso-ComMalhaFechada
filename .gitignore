@@ -1,0 +1,4 @@
+build
+output
+dependencies.lock
+sdkconfig

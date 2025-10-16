@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "bicainclude.h": "c",
+        "cstdint": "c"
+    },
+    "idf.port": "/dev/ttyUSB0",
+    "idf.flashType": "UART"
+}
