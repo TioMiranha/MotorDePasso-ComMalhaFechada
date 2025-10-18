@@ -67,7 +67,7 @@ void app_main()
     printf("   • Velocidade atual: %u PPS\n", velocidade_pps);
     printf("   • Range: 10 - 50.000 PPS\n");
     printf("   • Rampas suaves com atualização a cada 10ms\n");
-
+    direcao_atual = DIRECAO_HORARIA;
     char opcao[10];
     gpio_set_level(DIR_PIN, direcao_atual);
     printf("   • Direção inicial: %s\n",

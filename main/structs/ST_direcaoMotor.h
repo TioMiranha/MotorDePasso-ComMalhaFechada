@@ -5,8 +5,8 @@
 
 typedef enum
 {
-    DIRECAO_HORARIA = 0,
-    DIRECAO_ANTI_HORARIA = 1
+    DIRECAO_HORARIA = 1,
+    DIRECAO_ANTI_HORARIA = 0
 } direcao_motor_t;
 
 #endif

@@ -1,25 +1,53 @@
 #include "../include/bicaInclude.h"
 
-// Função para aplicar amortecedor a valores normalizados
-uint8_t aplicar_amortecedor(uint8_t valor_desejado) {
-    if (ultimo_valor_normalizado == 0 && valor_desejado == 0) {
-        return 0;
+#include "../include/bicaInclude.h"
+
+uint16_t aplicar_amortecedor(uint16_t valor_desejado) {
+    if (ultimo_valor_normalizado == VELOCIDADE_NEUTRA && valor_desejado != VELOCIDADE_NEUTRA) {
+        // Transição de parado para movimento - suavizar bastante
+        uint16_t valor_suavizado = (uint16_t)(0.1f * valor_desejado + 0.9f * ultimo_valor_normalizado);
+        ultimo_valor_normalizado = valor_suavizado;
+        return valor_suavizado;
     }
     
-    // Aplica suavização exponencial
-    uint8_t valor_suavizado = (uint8_t)(amortecedor_factor * valor_desejado + 
-                                       (1.0f - amortecedor_factor) * ultimo_valor_normalizado);
+    if (valor_desejado == VELOCIDADE_NEUTRA && ultimo_valor_normalizado != VELOCIDADE_NEUTRA) {
+        // Transição de movimento para parado - suavizar bastante
+        uint16_t valor_suavizado = (uint16_t)(0.2f * valor_desejado + 0.8f * ultimo_valor_normalizado);
+        ultimo_valor_normalizado = valor_suavizado;
+        return valor_suavizado;
+    }
+    
+    // CORREÇÃO: Suavização exponencial adaptativa baseada na diferença
+    int32_t diferenca = abs((int32_t)valor_desejado - (int32_t)ultimo_valor_normalizado);
+    float factor_adaptativo = amortecedor_factor;
+    
+    // Se a diferença for grande, suavizar mais
+    if (diferenca > 1000) {
+        factor_adaptativo = amortecedor_factor * 0.5f;
+    }
+    
+    uint16_t valor_suavizado = (uint16_t)(factor_adaptativo * valor_desejado + 
+                                        (1.0f - factor_adaptativo) * ultimo_valor_normalizado);
     
     ultimo_valor_normalizado = valor_suavizado;
     return valor_suavizado;
 }
 
-void configurar_amortecedor(float factor)
-{
-    if (factor < 0.0f)
-        factor = 0.0f;
-    if (factor > 1.0f)
-        factor = 1.0f;
+// Função para resetar o amortecedor (útil nas transições de direção)
+void resetar_amortecedor(uint16_t valor_inicial) {
+    ultimo_valor_normalizado = valor_inicial;
+    printf("🔄 Amortecedor resetado para: %u\n", valor_inicial);
+}
+
+void configurar_amortecedor(float factor) {
+    if (factor < 0.05f) factor = 0.05f;  // Mínimo 5% de suavização
+    if (factor > 0.8f) factor = 0.8f;    // Máximo 80% de suavização
+    
     amortecedor_factor = factor;
-    printf("Amortecedor configurado: %.2f\n", factor);
+    printf("🎛️  Amortecedor configurado: %.2f\n", factor);
+}
+
+// Função para obter o último valor do amortecedor (para debug)
+uint16_t obter_ultimo_valor_amortecedor() {
+    return ultimo_valor_normalizado;
 }

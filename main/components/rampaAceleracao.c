@@ -11,10 +11,9 @@ void rampa_aceleracao_trapezoidal(uint16_t normalizada_inicial, uint16_t normali
         return;
     }
 
-    // Aplica limites
     if (normalizada_inicial > VELOCIDADE_MAXIMA) normalizada_inicial = VELOCIDADE_MAXIMA;
     if (normalizada_final > VELOCIDADE_MAXIMA) normalizada_final = VELOCIDADE_MAXIMA;
-
+    
     int32_t diferenca = (int32_t)normalizada_final - (int32_t)normalizada_inicial;
     if (diferenca == 0)
     {
@@ -27,8 +26,8 @@ void rampa_aceleracao_trapezoidal(uint16_t normalizada_inicial, uint16_t normali
     direcao_motor_t dir_inicial, dir_final;
     uint32_t pps_inicial, pps_final;
     
-    converter_normalizada_para_pps(normalizada_inicial, &pps_inicial, &dir_inicial);
-    converter_normalizada_para_pps(normalizada_final, &pps_final, &dir_final);
+    converter_normalizada_para_pps(normalizada_inicial, &pps_inicial, &dir_inicial); // Bagulho ta errado
+    converter_normalizada_para_pps(normalizada_final, &pps_final, &dir_final); // Saporra ta errada
 
     // CORREÇÃO: Se mesma direção, velocidade_pico é a que tem maior PPS
     if (dir_inicial == dir_final) {
@@ -196,105 +195,6 @@ void rampa_aceleracao_trapezoidal(uint16_t normalizada_inicial, uint16_t normali
     printf("🎊 Rampa trapezoidal LINEAR concluída: %u/8192\n", normalizada_final);
 }
 
-void rampa_aceleracao_trapezoidal_avancada(uint32_t pps_inicial, uint32_t pps_final, uint32_t duracao_ms, uint32_t aceleracao_max_pps_s)
-{
-    printf("🎯 Iniciando rampa TRAPEZOIDAL AVANÇADA: %u -> %u PPS em %u ms\n", pps_inicial, pps_final, duracao_ms);
-    printf("⚡ Aceleração máxima: %u PPS/s\n", aceleracao_max_pps_s);
-
-    if (!motor_ligado)
-    {
-        printf("Ligue o motor primeiro!\n");
-        return;
-    }
-
-    // Garantir valores válidos
-    if (pps_inicial <= 0)
-        pps_inicial = 0;
-    if (pps_final <= 0)
-        pps_final = 0;
-    if (pps_inicial > 50000)
-        pps_inicial = 50000;
-    if (pps_final > 50000)
-        pps_final = 50000;
-
-    int32_t diferenca_velocidade = (int32_t)pps_final - (int32_t)pps_inicial;
-
-    if (diferenca_velocidade == 0)
-    {
-        printf("Velocidade inicial e final são iguais!\n");
-        return;
-    }
-
-    uint32_t aceleracao_necessaria = abs(diferenca_velocidade) * 1000 / duracao_ms;
-
-    uint32_t aceleracao_usada = (aceleracao_necessaria < aceleracao_max_pps_s) ? aceleracao_necessaria : aceleracao_max_pps_s;
-
-    uint32_t tempo_acel_desac = abs(diferenca_velocidade) * 1000 / aceleracao_usada;
-
-    if (tempo_acel_desac * 2 > duracao_ms * 0.8)
-    {
-        tempo_acel_desac = (duracao_ms * 0.8) / 2;
-        printf("🔄 Ajuste: tempo de aceleração otimizado para %u ms\n", tempo_acel_desac);
-    }
-
-    uint32_t tempo_constante = duracao_ms - (2 * tempo_acel_desac);
-    uint32_t velocidade_maxima;
-
-    if (diferenca_velocidade > 0)
-    {
-        // ACELERAÇÃO
-        velocidade_maxima = pps_inicial + (aceleracao_usada * tempo_acel_desac) / 1000;
-        if (velocidade_maxima > pps_final)
-            velocidade_maxima = pps_final;
-    }
-    else
-    {
-        // DESACELERAÇÃO
-        velocidade_maxima = pps_inicial;
-        uint32_t nova_inicial = pps_final + (aceleracao_usada * tempo_acel_desac) / 1000;
-        if (nova_inicial < pps_inicial)
-            pps_inicial = nova_inicial;
-    }
-
-    printf("📊 Perfil calculado:\n");
-    printf("   • Aceleração/Desaceleração: %u ms cada\n", tempo_acel_desac);
-    printf("   • Velocidade constante: %u ms\n", tempo_constante);
-    printf("   • Velocidade máxima: %u PPS\n", velocidade_maxima);
-    printf("   • Aceleração usada: %u PPS/s\n", aceleracao_usada);
-
-    // 🎯 EXECUÇÃO OTIMIZADA
-    if (diferenca_velocidade > 0)
-    {
-        // Caso aceleração
-        rampa_aceleracao_trapezoidal(pps_inicial, velocidade_maxima, tempo_acel_desac);
-
-        if (tempo_constante > 0 && motor_ligado)
-        {
-            alterar_velocidade(velocidade_maxima);
-            printf("   ⏱️  Fase constante: %u ms\n", tempo_constante);
-            vTaskDelay(pdMS_TO_TICKS(tempo_constante));
-        }
-
-        rampa_aceleracao_trapezoidal(velocidade_maxima, pps_final, tempo_acel_desac);
-    }
-    else
-    {
-        // Caso desaceleração
-        rampa_aceleracao_trapezoidal(pps_inicial, velocidade_maxima, tempo_acel_desac);
-
-        if (tempo_constante > 0 && motor_ligado)
-        {
-            alterar_velocidade(velocidade_maxima);
-            printf("   ⏱️  Fase constante: %u ms\n", tempo_constante);
-            vTaskDelay(pdMS_TO_TICKS(tempo_constante));
-        }
-
-        rampa_aceleracao_trapezoidal(velocidade_maxima, pps_final, tempo_acel_desac);
-    }
-
-    printf("✅ Rampa trapezoidal avançada concluída: %u PPS\n", pps_final);
-}
-
 void executar_rampa_trapezoidal_rapida()
 {
     if (!motor_ligado)
@@ -304,29 +204,7 @@ void executar_rampa_trapezoidal_rapida()
     }
     printf("Executando rampa trapezoidal RÁPIDA\n");
     //configurar_amortecedor(0.1f);
-    rampa_aceleracao_trapezoidal(500, 1024, 1200);
-}
-
-void executar_rampa_trapezoidal_suave()
-{
-    if (!motor_ligado)
-    {
-        printf("Ligue o motor primeiro! (Opção 1)\n");
-        return;
-    }
-    printf("Executando rampa trapezoidal SUAVE\n");
-    rampa_aceleracao_trapezoidal(20, 100, 3000); 
-}
-
-void executar_rampa_trapezoidal_avancada_rapida()
-{
-    if (!motor_ligado)
-    {
-        printf("Ligue o motor primeiro! (Opção 1)\n");
-        return;
-    }
-    printf("⚡ Executando rampa trapezoidal AVANÇADA RÁPIDA\n");
-    rampa_aceleracao_trapezoidal_avancada(20, 49, 2000, 15000); // Aceleração máxima de 15000 PPS/s
+    rampa_aceleracao_trapezoidal(100, 1024, 1200);
 }
 
 void executar_rampa_trapezoidal_avancada_rapida_em_transicao()

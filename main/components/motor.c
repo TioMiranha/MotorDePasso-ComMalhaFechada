@@ -13,7 +13,8 @@ void tarefa_girar_motor(void *param)
     while (motor_ligado)
     {
         // 🔥 CORREÇÃO CRÍTICA: Resetar watchdog a cada 100ms no máximo
-        if ((xTaskGetTickCount() - ultimo_watchdog_reset) * portTICK_PERIOD_MS > 100) {
+        if ((xTaskGetTickCount() - ultimo_watchdog_reset) * portTICK_PERIOD_MS > 100)
+        {
             esp_task_wdt_reset();
             ultimo_watchdog_reset = xTaskGetTickCount();
         }
@@ -37,19 +38,20 @@ void tarefa_girar_motor(void *param)
             }
             else
             {
-                periodo_ticks = 500; 
+                periodo_ticks = 500;
             }
 
             if (periodo_ticks < 20)
                 periodo_ticks = 20;
 
             ultima_velocidade = velocidade_atual;
-            
-            printf("🔄 Velocidade alterada para %u PPS (periodo: %u us)\n", 
+
+            printf("🔄 Velocidade alterada para %u PPS (periodo: %u us)\n",
                    velocidade_atual, periodo_ticks);
         }
 
-        if (velocidade_atual == 0) {
+        if (velocidade_atual == 0)
+        {
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
@@ -71,7 +73,7 @@ void tarefa_girar_motor(void *param)
             delay_ms = 1;
         if (delay_ms > 50)
             delay_ms = 50;
-            
+
         vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 

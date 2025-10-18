@@ -3,7 +3,8 @@
 
 #include "../include/bicaInclude.h"
 
-uint8_t aplicar_amortecedor(uint8_t valor_desejado);
+void resetar_amortecedor(uint16_t valor_inicial);
+uint16_t aplicar_amortecedor(uint16_t valor_desejado);
 void configurar_amortecedor(float factor);
 
 #endif

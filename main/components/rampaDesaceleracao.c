@@ -210,70 +210,91 @@ void executar_desaceleracao_trapezoidal_muito_rapida()
         xSemaphoreGive(xMutexVelocidade);
     }
 
-    //configurar_amortecedor(0.3f);
-    rampa_desaceleracao_trapezoidal(500, 3500, 1000);
+    rampa_desaceleracao_trapezoidal(1024, 100, 1000);
+
     // rampa_desaceleracao_trapezoidal(velocidade_atual, velocidade_atual / 2, 1000);
 }
 
-void executar_desaceleracao_para_zero_e_inverter(int8_t vel_normalizada_atual, direcao_motor_t nova_direcao)
+void executar_desaceleracao_para_zero_e_inverter(uint16_t vel_normalizada_atual, direcao_motor_t nova_direcao)
 {
-  if (!motor_ligado) {
+    if (!motor_ligado) {
         printf("❌ Ligue o motor primeiro!\n");
         return;
     }
 
-    // CORREÇÃO: Verificação mais robusta da velocidade atual
-    uint32_t pps_atual;
-    direcao_motor_t dir_temp;
-    converter_normalizada_para_pps(vel_normalizada_atual, &pps_atual, &dir_temp);
+    // CORREÇÃO: Resetar amortecedor no início da transição
+    resetar_amortecedor(vel_normalizada_atual);
     
-    printf("🔄 Invertendo direção - PPS atual: %u, Normalizada: %u\n", pps_atual, vel_normalizada_atual);
+    // Configurar amortecedor extra-suave para transição
+    float amortecedor_original = amortecedor_factor;
+    configurar_amortecedor(0.15f); // Muito suave para transição
 
-    // CORREÇÃO: Cálculo seguro da nova velocidade
+    uint32_t pps_atual;
+    direcao_motor_t dir_atual;
+    converter_normalizada_para_pps(vel_normalizada_atual, &pps_atual, &dir_atual);
+    
+    printf("🔄 Invertendo direção - PPS atual: %u, Normalizada: %u, Direção: %s\n", 
+           pps_atual, vel_normalizada_atual,
+           dir_atual == DIRECAO_HORARIA ? "HORÁRIA" : "ANTI-HORÁRIA");
+
+    // Calcular intensidade atual
+    uint16_t intensidade;
+    if (vel_normalizada_atual < VELOCIDADE_NEUTRA) {
+        intensidade = VELOCIDADE_NEUTRA - vel_normalizada_atual;
+    } else if (vel_normalizada_atual > VELOCIDADE_NEUTRA) {
+        intensidade = vel_normalizada_atual - VELOCIDADE_NEUTRA;
+    } else {
+        intensidade = 0;
+    }
+
+    // Calcular nova velocidade mantendo intensidade
     uint16_t nova_vel_normalizada;
     if (nova_direcao == DIRECAO_HORARIA) {
-        // Para horário: VELOCIDADE_NEUTRA - intensidade
-        uint16_t intensidade = (uint16_t)((pps_atual / (float)PPS_MAXIMO) * 4096.0f);
         nova_vel_normalizada = VELOCIDADE_NEUTRA - intensidade;
-        // CORREÇÃO: Garantir que não ultrapasse o mínimo (0)
-        if (nova_vel_normalizada > VELOCIDADE_NEUTRA) {
-            nova_vel_normalizada = 0;
+        if (nova_vel_normalizada < VELOCIDADE_MINIMA) {
+            nova_vel_normalizada = VELOCIDADE_MINIMA;
         }
     } else {
-        // Para anti-horário: VELOCIDADE_NEUTRA + intensidade
-        uint16_t intensidade = (uint16_t)((pps_atual / (float)PPS_MAXIMO) * 4096.0f);
         nova_vel_normalizada = VELOCIDADE_NEUTRA + intensidade;
-        // CORREÇÃO: Garantir que não ultrapasse o máximo (8192)
-        if (nova_vel_normalizada < VELOCIDADE_NEUTRA || nova_vel_normalizada > VELOCIDADE_MAXIMA) {
+        if (nova_vel_normalizada > VELOCIDADE_MAXIMA) {
             nova_vel_normalizada = VELOCIDADE_MAXIMA;
         }
     }
 
-    printf("🎯 Transição: %u -> PARADA -> %u\n", vel_normalizada_atual, nova_vel_normalizada);
+    printf("🎯 Transição: %u (%s) -> PARADA -> %u (%s)\n", 
+           vel_normalizada_atual,
+           dir_atual == DIRECAO_HORARIA ? "HORÁRIA" : "ANTI-HORÁRIA",
+           nova_vel_normalizada,
+           nova_direcao == DIRECAO_HORARIA ? "HORÁRIA" : "ANTI-HORÁRIA");
 
-    // FASE 1: Desacelerar até PARADA COMPLETA
+    // FASE 1: Desacelerar até PARADA COMPLETA com amortecedor
     printf("📉 Fase 1: Desacelerando até parada completa...\n");
-    
-    // CORREÇÃO: Usar rampa de aceleração para desaceleração (mais confiável)
-    rampa_aceleracao_trapezoidal(vel_normalizada_atual, VELOCIDADE_NEUTRA, 1000);
+    rampa_desaceleracao_trapezoidal(vel_normalizada_atual, VELOCIDADE_NEUTRA, 1000);
 
-    // CORREÇÃO: Garantir parada completa com verificação
+    // Garantir parada completa
     setar_velocidade_normalizada(VELOCIDADE_NEUTRA);
-    vTaskDelay(pdMS_TO_TICKS(200)); // Pausa maior para estabilização
+    vTaskDelay(pdMS_TO_TICKS(150));
     printf("🛑 Motor parado completamente\n");
 
     // FASE 2: Alterar direção física
     printf("🔀 Alterando direção física...\n");
     gpio_set_level(DIR_PIN, nova_direcao);
     direcao_atual = nova_direcao;
-    vTaskDelay(pdMS_TO_TICKS(100)); // Pausa após mudança de direção
-
+    vTaskDelay(pdMS_TO_TICKS(80));
     printf("✅ Direção alterada para: %s\n", 
            nova_direcao == DIRECAO_HORARIA ? "HORÁRIA" : "ANTI-HORÁRIA");
 
-    // FASE 3: Acelerar na nova direção
-    printf("📈 Fase 3: Acelerando na nova direção...\n");
-    rampa_aceleracao_trapezoidal(VELOCIDADE_NEUTRA, nova_vel_normalizada, 1000);
+    // CORREÇÃO: Resetar amortecedor para a nova direção
+    resetar_amortecedor(VELOCIDADE_NEUTRA);
 
-    printf("🎊 Inversão de direção concluída!\n");
+    // FASE 3: Acelerar suavemente com amortecedor
+    printf("📈 Fase 3: Acelerando suavemente na nova direção...\n");
+    
+    // CORREÇÃO: Usar rampa mais longa e com amortecedor ativo
+    rampa_aceleracao_trapezoidal(VELOCIDADE_NEUTRA, nova_vel_normalizada, 1200);
+
+    // CORREÇÃO: Restaurar amortecedor original
+    configurar_amortecedor(amortecedor_original);
+    
+    printf("🎊 Inversão de direção SUAVE concluída!\n");
 }
