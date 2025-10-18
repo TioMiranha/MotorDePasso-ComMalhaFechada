@@ -1,6 +1,24 @@
 #include "include/bicaInclude.h"
 #include "GLOBAL_VARS/vars.h"
 
+void inicializar_sistema_watchdog()
+{
+    const uint32_t timeout = 5;
+    const bool trigger_panic = true;
+
+    esp_err_t ret;
+
+    // Inicializa o watchdog de tarefas
+    ret = esp_task_wdt_init(timeout, trigger_panic);
+    if (ret == ESP_ERR_INVALID_STATE)
+        ESP_LOGW(TAG, "Watchdog já inicializado");
+    else
+        ESP_ERROR_CHECK(ret);
+
+    // Adiciona a tarefa atual ao watchdog (NULL = tarefa atual)
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+    ESP_LOGI(TAG, "Watchdog inicializado com timeout de %d segundos", timeout);
+}
 
 // Menu interativo
 void mostrar_menu()
@@ -37,6 +55,11 @@ void app_main()
 
     configurar_gpio();
     configurar_rmt();
+    // inicializar_sistema_watchdog(); // desabilitando saporra
+    esp_task_wdt_init(5, true); // 5 segundos
+    esp_task_wdt_add(NULL);     // Para tarefa IDLE
+
+    xTaskCreate(tarefa_girar_motor, "MotorTask", 4096, NULL, 2, &tarefa_motor);
 
     printf("\n🔧 CONFIGURAÇÃO RMT OTIMIZADA:\n");
     printf("   • Frequência RMT: 1 MHz (1 tick = 1µs)\n");
@@ -52,6 +75,7 @@ void app_main()
 
     while (1)
     {
+        esp_task_wdt_reset();
         mostrar_menu();
 
         if (fgets(opcao, sizeof(opcao), stdin))
@@ -121,6 +145,7 @@ void app_main()
             case 'A':
             case 'a':
                 executar_mover_frente_rapido();
+                break;
             case 'B':
             case 'b':
                 executar_mover_frente_devagar();

@@ -9,6 +9,7 @@
 #include "driver/gpio.h"
 #include "driver/rmt.h"
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 // Variáveis globais
 #include ".././GLOBAL_VARS/vars.h"
@@ -23,7 +24,7 @@
 #include ".././functions/motor.h"
 #include ".././functions/movimentoControlado.h"
 #include ".././functions/rampas.h"
-#include ".././functions/aceleracao.h"
+#include ".././functions/velocidade.h"
 
 // Configurações do motor
 #define STEP_PIN GPIO_NUM_5

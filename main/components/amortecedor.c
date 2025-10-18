@@ -1,18 +1,17 @@
 #include "../include/bicaInclude.h"
 
-uint32_t aplicar_amortecedor(uint32_t pps_desejado)
-{
-    if (ultimo_pps == 0)
-    {
-        ultimo_pps = pps_desejado;
-        return pps_desejado;
+// Função para aplicar amortecedor a valores normalizados
+uint8_t aplicar_amortecedor(uint8_t valor_desejado) {
+    if (ultimo_valor_normalizado == 0 && valor_desejado == 0) {
+        return 0;
     }
-
-    uint32_t pps_suavizado = (uint32_t)(amortecedor_factor * pps_desejado +
-                                        (1.0f - amortecedor_factor) * ultimo_pps);
-
-    ultimo_pps = pps_suavizado;
-    return pps_suavizado;
+    
+    // Aplica suavização exponencial
+    uint8_t valor_suavizado = (uint8_t)(amortecedor_factor * valor_desejado + 
+                                       (1.0f - amortecedor_factor) * ultimo_valor_normalizado);
+    
+    ultimo_valor_normalizado = valor_suavizado;
+    return valor_suavizado;
 }
 
 void configurar_amortecedor(float factor)

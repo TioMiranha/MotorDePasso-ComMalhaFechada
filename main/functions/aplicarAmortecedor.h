@@ -3,7 +3,7 @@
 
 #include "../include/bicaInclude.h"
 
-uint32_t aplicar_amortecedor(uint32_t pps_desejado);
+uint8_t aplicar_amortecedor(uint8_t valor_desejado);
 void configurar_amortecedor(float factor);
 
 #endif

@@ -2,14 +2,22 @@
 
 void tarefa_girar_motor(void *param)
 {
-    printf("Iniciando rotacao continua\n");
+    printf("🎯 Iniciando tarefa de rotação contínua\n");
 
     uint32_t ultima_velocidade = 0;
-    uint32_t periodo_ticks = 500; // Inicial a 2000 PPS
+    uint32_t periodo_ticks = 500;
+    uint32_t ultimo_watchdog_reset = xTaskGetTickCount();
+
+    esp_task_wdt_add(NULL);
 
     while (motor_ligado)
     {
-        // Obter velocidade atual de forma protegida
+        // 🔥 CORREÇÃO CRÍTICA: Resetar watchdog a cada 100ms no máximo
+        if ((xTaskGetTickCount() - ultimo_watchdog_reset) * portTICK_PERIOD_MS > 100) {
+            esp_task_wdt_reset();
+            ultimo_watchdog_reset = xTaskGetTickCount();
+        }
+
         uint32_t velocidade_atual;
         if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
         {
@@ -21,7 +29,6 @@ void tarefa_girar_motor(void *param)
             velocidade_atual = 2000;
         }
 
-        // Só recalcular se a velocidade mudou
         if (velocidade_atual != ultima_velocidade)
         {
             if (velocidade_atual > 0)
@@ -30,17 +37,23 @@ void tarefa_girar_motor(void *param)
             }
             else
             {
-                periodo_ticks = 500; // Fallback
+                periodo_ticks = 500; 
             }
 
-            // Garantir período mínimo válido
             if (periodo_ticks < 20)
                 periodo_ticks = 20;
 
             ultima_velocidade = velocidade_atual;
+            
+            printf("🔄 Velocidade alterada para %u PPS (periodo: %u us)\n", 
+                   velocidade_atual, periodo_ticks);
         }
 
-        // Pulso com 25% de duty cycle
+        if (velocidade_atual == 0) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
         uint32_t pulse_width = periodo_ticks / 4;
         if (pulse_width < 5)
             pulse_width = 5;
@@ -53,18 +66,21 @@ void tarefa_girar_motor(void *param)
 
         ESP_ERROR_CHECK(rmt_write_items(RMT_TX_CHANNEL, &pulso, 1, false));
 
-        uint32_t delay_ticks = periodo_ticks / 1000;
-        if (delay_ticks < 1)
-            delay_ticks = 1;
-        vTaskDelay(pdMS_TO_TICKS(delay_ticks));
+        uint32_t delay_ms = periodo_ticks / 1000;
+        if (delay_ms < 1)
+            delay_ms = 1;
+        if (delay_ms > 50)
+            delay_ms = 50;
+            
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 
-    printf("Rotacao parada\n");
+    printf("🛑 Rotação parada - tarefa do motor finalizada\n");
+    esp_task_wdt_delete(NULL);
     tarefa_motor = NULL;
     vTaskDelete(NULL);
 }
 
-// Inicia rotação contínua
 void iniciar_rotacao()
 {
     if (tarefa_motor != NULL)
@@ -95,6 +111,7 @@ void iniciar_rotacao()
 void parar_rotacao()
 {
     motor_ligado = 0;
+
     if (tarefa_motor != NULL)
     {
         vTaskDelay(pdMS_TO_TICKS(100));
