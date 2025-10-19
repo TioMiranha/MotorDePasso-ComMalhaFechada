@@ -17,20 +17,23 @@ void alterar_direcao_suave(direcao_motor_t nova_direcao)
         return;
     }
 
-    printf("Invertendo direção com PARADA COMPLETA...\n");
+    printf("🔄 Invertendo direção com transição SUAVE...\n");
 
-    uint32_t velocidade_atual = 0;
-    if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
+    // Obter velocidade atual de forma segura
+    uint32_t velocidade_atual_pps = 0;
+    if (xSemaphoreTake(xMutexVelocidade, pdMS_TO_TICKS(100)) == pdTRUE)
     {
-        velocidade_atual = velocidade_pps;
+        velocidade_atual_pps = velocidade_pps;
         xSemaphoreGive(xMutexVelocidade);
     }
     else
     {
-        velocidade_atual = 2000;
+        // Fallback: usar velocidade média
+        velocidade_atual_pps = (PPS_MAXIMO + PPS_MINIMO) / 2;
+        printf("⚠️  Não foi possível obter velocidade, usando valor médio: %u PPS\n", velocidade_atual_pps);
     }
 
-    executar_desaceleracao_para_zero_e_inverter(velocidade_atual, nova_direcao);
+    executar_desaceleracao_para_zero_e_inverter(velocidade_atual_pps, nova_direcao);
 }
 
 void direcao_horaria()

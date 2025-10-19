@@ -10,7 +10,7 @@
 #include "driver/rmt.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
-
+#include <math.h>
 // Variáveis globais
 #include ".././GLOBAL_VARS/vars.h"
 

@@ -4,24 +4,20 @@
 
 uint16_t aplicar_amortecedor(uint16_t valor_desejado) {
     if (ultimo_valor_normalizado == VELOCIDADE_NEUTRA && valor_desejado != VELOCIDADE_NEUTRA) {
-        // Transição de parado para movimento - suavizar bastante
         uint16_t valor_suavizado = (uint16_t)(0.1f * valor_desejado + 0.9f * ultimo_valor_normalizado);
         ultimo_valor_normalizado = valor_suavizado;
         return valor_suavizado;
     }
     
     if (valor_desejado == VELOCIDADE_NEUTRA && ultimo_valor_normalizado != VELOCIDADE_NEUTRA) {
-        // Transição de movimento para parado - suavizar bastante
         uint16_t valor_suavizado = (uint16_t)(0.2f * valor_desejado + 0.8f * ultimo_valor_normalizado);
         ultimo_valor_normalizado = valor_suavizado;
         return valor_suavizado;
     }
     
-    // CORREÇÃO: Suavização exponencial adaptativa baseada na diferença
     int32_t diferenca = abs((int32_t)valor_desejado - (int32_t)ultimo_valor_normalizado);
     float factor_adaptativo = amortecedor_factor;
     
-    // Se a diferença for grande, suavizar mais
     if (diferenca > 1000) {
         factor_adaptativo = amortecedor_factor * 0.5f;
     }
@@ -33,7 +29,6 @@ uint16_t aplicar_amortecedor(uint16_t valor_desejado) {
     return valor_suavizado;
 }
 
-// Função para resetar o amortecedor (útil nas transições de direção)
 void resetar_amortecedor(uint16_t valor_inicial) {
     ultimo_valor_normalizado = valor_inicial;
     printf("🔄 Amortecedor resetado para: %u\n", valor_inicial);

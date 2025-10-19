@@ -7,7 +7,7 @@ const char *TAG = "MOTOR_RMT";
 
 //MOtor
 volatile int motor_ligado = 0;
-volatile uint32_t velocidade_pps = 20;
+volatile uint32_t velocidade_pps = 2000;
 TaskHandle_t tarefa_motor = NULL;
 //Movimento
 volatile int movimento_em_andamento = 0;
