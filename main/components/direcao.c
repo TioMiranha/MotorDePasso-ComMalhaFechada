@@ -20,7 +20,7 @@ void alterar_direcao_suave(direcao_motor_t nova_direcao)
     printf("🔄 Invertendo direção com transição SUAVE...\n");
 
     // Obter velocidade atual de forma segura
-    uint32_t velocidade_atual_pps = 0;
+    uint32_t velocidade_atual_pps = velocidade_pps;
     if (xSemaphoreTake(xMutexVelocidade, pdMS_TO_TICKS(100)) == pdTRUE)
     {
         velocidade_atual_pps = velocidade_pps;
@@ -29,7 +29,7 @@ void alterar_direcao_suave(direcao_motor_t nova_direcao)
     else
     {
         // Fallback: usar velocidade média
-        velocidade_atual_pps = (PPS_MAXIMO + PPS_MINIMO) / 2;
+        velocidade_atual_pps = 2000;
         printf("⚠️  Não foi possível obter velocidade, usando valor médio: %u PPS\n", velocidade_atual_pps);
     }
 

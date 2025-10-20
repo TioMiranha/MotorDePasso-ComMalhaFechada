@@ -87,7 +87,7 @@ void app_main()
                 break;
 
             case '2':
-                parar_rotacao();
+                desacelerar_e_desligar();
                 break;
 
             case '3':
@@ -98,7 +98,7 @@ void app_main()
                     nova_vel = velocidade_pps + 1000;
                     xSemaphoreGive(xMutexVelocidade);
                 }
-                alterar_velocidade(nova_vel);
+                acelerar_suavemente_para(nova_vel);
                 break;
             }
 
@@ -110,13 +110,13 @@ void app_main()
                     nova_vel = (velocidade_pps > 1000) ? velocidade_pps - 1000 : 10;
                     xSemaphoreGive(xMutexVelocidade);
                 }
-                alterar_velocidade(nova_vel);
+                desacelerar_suavemente_para(nova_vel);
                 break;
             }
 
             case '5':
             {
-                printf("Digite a velocidade (10-50000 PPS): ");
+                printf("Digite a velocidade (10-20000 PPS): ");
                 char entrada[20];
                 if (fgets(entrada, sizeof(entrada), stdin))
                 {

@@ -17,5 +17,8 @@ void converter_normalizada_para_pps_corrigida(uint16_t normalizada, uint32_t *pp
 int comparar_velocidades(uint16_t vel1, uint16_t vel2);
 uint16_t obter_magnitude_velocidade(uint16_t normalizada);
 void setar_velocidade_normalizada(uint16_t nova_velocidade);
+void acelerar_suavemente_para(uint32_t vel_alvo);
+void desacelerar_suavemente_para(uint32_t vel_alvo);
+void desacelerar_e_desligar();
 
 #endif
