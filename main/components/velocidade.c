@@ -144,14 +144,13 @@ void acelerar_suavemente_para(uint32_t vel_alvo)
 
     printf("🚀 Aceleração suave: %u → %u PPS\n", velocidade_atual, vel_alvo);
 
-    // Tempo de aceleração baseado na diferença de velocidade
     uint32_t diferenca = vel_alvo - velocidade_atual;
     uint32_t tempo_aceleracao;
 
     if (diferenca < 1000)
-        tempo_aceleracao = 550;
+        tempo_aceleracao = 600;
     else if (diferenca < 3000)
-        tempo_aceleracao = 800;
+        tempo_aceleracao = 850;
     else if (diferenca < 8000)
         tempo_aceleracao = 1000;
     else
@@ -180,7 +179,6 @@ void acelerar_suavemente_para(uint32_t vel_alvo)
         tempo_decorrido = (xTaskGetTickCount() - inicio) * portTICK_PERIOD_MS;
     }
 
-    // Garantir velocidade final exata
     alterar_velocidade(vel_alvo);
     printf("✅ Aceleração concluída: %u PPS\n", vel_alvo);
 }
@@ -207,11 +205,9 @@ void desacelerar_suavemente_para(uint32_t vel_alvo)
 
     printf("📉 Desaceleração suave: %u → %u PPS\n", velocidade_atual, vel_alvo);
 
-    // Cálculo melhorado do tempo de desaceleração
     uint32_t diferenca = velocidade_atual - vel_alvo;
     uint32_t tempo_desaceleracao;
     
-    // Tempo baseado na diferença relativa e velocidade atual
     float diferenca_relativa = (float)diferenca / velocidade_atual;
     
     if (diferenca_relativa < 0.3f) tempo_desaceleracao = 550;
@@ -219,7 +215,6 @@ void desacelerar_suavemente_para(uint32_t vel_alvo)
     else if (diferenca < 5000) tempo_desaceleracao = 1000;
     else tempo_desaceleracao = 1200;
 
-    // Garantir tempo mínimo para desaceleração suave
     if (tempo_desaceleracao < 300) tempo_desaceleracao = 300;
 
     uint32_t inicio = xTaskGetTickCount();
@@ -231,7 +226,6 @@ void desacelerar_suavemente_para(uint32_t vel_alvo)
 
         float progresso = (float)tempo_decorrido / tempo_desaceleracao;
         
-        // Curva de desaceleração melhorada - mais suave no início e fim
         float progresso_suavizado;
         if (progresso < 0.5f) {
             progresso_suavizado = 2.0f * progresso * progresso;
@@ -241,15 +235,12 @@ void desacelerar_suavemente_para(uint32_t vel_alvo)
         
         uint32_t pps_interpolado = velocidade_atual - (uint32_t)(diferenca * progresso_suavizado);
         
-        // Limites mais rigorosos
         if (pps_interpolado > PPS_MAXIMO) pps_interpolado = PPS_MAXIMO;
         if (pps_interpolado < PPS_MINIMO) pps_interpolado = PPS_MINIMO;
 
-        // Evitar mudanças muito bruscas entre steps consecutivos
         if (ultima_velocidade > pps_interpolado) {
             uint32_t delta = ultima_velocidade - pps_interpolado;
-            // Limitar a variação máxima por step
-            if (delta > (diferenca / 20)) { // Máximo 5% da diferença total por step
+            if (delta > (diferenca / 20)) { 
                 pps_interpolado = ultima_velocidade - (diferenca / 20);
             }
         }
@@ -261,135 +252,11 @@ void desacelerar_suavemente_para(uint32_t vel_alvo)
         tempo_decorrido = (xTaskGetTickCount() - inicio) * portTICK_PERIOD_MS;
     }
 
-    // Garantir velocidade final exata
     alterar_velocidade(vel_alvo);
     
-    // Pequena pausa para estabilização
     vTaskDelay(pdMS_TO_TICKS(20));
     
     printf("✅ Desaceleração concluída: %u PPS\n", vel_alvo);
-}
-
-void desacelerar_e_desligar()
-{
-    if (!motor_ligado) {
-        printf("❌ Motor já está desligado!\n");
-        return;
-    }
-
-    printf("🛑 Iniciando desaceleração e desligamento do motor\n");
-
-    uint32_t velocidade_atual = 0;
-    if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE) {
-        velocidade_atual = velocidade_pps;
-        xSemaphoreGive(xMutexVelocidade);
-    }
-
-    // Se já estiver parado ou quase parado, apenas vai para neutro
-    if (velocidade_atual <= PPS_MINIMO) {
-        printf("⚡ Motor quase parado - indo para posição neutra\n");
-        
-        // Apenas vai para neutro sem desligar completamente
-        setar_velocidade_normalizada(VELOCIDADE_NEUTRA);
-        
-        printf("✅ Motor em posição neutra\n");
-        return;
-    }
-
-    // DESACELERAÇÃO ULTRA-SUAVE PARA PARADA COMPLETA
-    printf("📉 Desacelerando de %u PPS até parar completamente\n", velocidade_atual);
-
-    // Converter PPS atual para valor normalizado para manter a direção correta
-    uint16_t normalizada_atual = converter_pps_para_normalizada(velocidade_atual, direcao_atual);
-    
-    // Calcular a trajetória de desaceleração no espaço normalizado
-    uint16_t normalizada_neutra = VELOCIDADE_NEUTRA;
-    
-    // Determinar se estamos no sentido horário ou anti-horário
-    uint16_t magnitude_atual = obter_magnitude_velocidade(normalizada_atual);
-    uint8_t sentido_horario = (normalizada_atual < VELOCIDADE_NEUTRA);
-
-    printf("🎯 Desaceleração no espaço normalizado: %u → %u (%s)\n", 
-           normalizada_atual, normalizada_neutra,
-           sentido_horario ? "HORÁRIO" : "ANTI-HORÁRIO");
-
-    // Estratégia de desaceleração adaptativa baseada na magnitude
-    uint32_t num_steps;
-    
-    if (magnitude_atual < 1000) num_steps = 15;
-    else if (magnitude_atual < 2500) num_steps = 20;
-    else if (magnitude_atual < 4000) num_steps = 25;
-    else num_steps = 30;
-
-    for (uint32_t step = 1; step <= num_steps; step++) {
-        // Verificar se o motor ainda deve continuar desacelerando
-        if (!motor_ligado) {
-            printf("⚠️  Desaceleração interrompida - motor foi religado\n");
-            return;
-        }
-
-        esp_task_wdt_reset();
-
-        float progresso = (float)step / num_steps;
-        
-        // Curva de desaceleração muito suave para parada total
-        float progresso_suavizado;
-        if (progresso < 0.3f) {
-            progresso_suavizado = progresso * 0.4f; // Bem suave no início
-        } else if (progresso < 0.7f) {
-            progresso_suavizado = 0.12f + (progresso - 0.3f) * 0.93f; // CORREÇÃO: 0.24f para 0.12f
-        } else {
-            progresso_suavizado = 0.48f + (progresso - 0.7f) * 1.73f; // CORREÇÃO: ajuste matemático
-        }
-        
-        if (progresso_suavizado > 1.0f) progresso_suavizado = 1.0f;
-        
-        // Calcular valor normalizado interpolado
-        uint16_t normalizada_interpolada;
-        if (sentido_horario) {
-            // Horário: vai de normalizada_atual até VELOCIDADE_NEUTRA
-            int32_t diferenca = VELOCIDADE_NEUTRA - normalizada_atual;
-            normalizada_interpolada = normalizada_atual + (uint16_t)(diferenca * progresso_suavizado);
-        } else {
-            // Anti-horário: vai de normalizada_atual até VELOCIDADE_NEUTRA
-            int32_t diferenca = normalizada_atual - VELOCIDADE_NEUTRA;
-            normalizada_interpolada = normalizada_atual - (uint16_t)(diferenca * progresso_suavizado);
-        }
-
-        // Garantir que não ultrapassemos o ponto neutro
-        if (sentido_horario && normalizada_interpolada > VELOCIDADE_NEUTRA) {
-            normalizada_interpolada = VELOCIDADE_NEUTRA;
-        } else if (!sentido_horario && normalizada_interpolada < VELOCIDADE_NEUTRA) {
-            normalizada_interpolada = VELOCIDADE_NEUTRA;
-        }
-
-        // Usar setar_velocidade_normalizada para garantir conversão correta
-        setar_velocidade_normalizada(normalizada_interpolada);
-
-        // Delay progressivamente maior conforme nos aproximamos do neutro
-        uint32_t magnitude_atual_step = obter_magnitude_velocidade(normalizada_interpolada);
-        uint32_t delay_ms;
-        
-        if (magnitude_atual_step > 2000) delay_ms = 8;
-        else if (magnitude_atual_step > 800) delay_ms = 12;
-        else if (magnitude_atual_step > 200) delay_ms = 15;
-        else delay_ms = 20;
-        
-        vTaskDelay(pdMS_TO_TICKS(delay_ms));
-
-        // Se chegou ao neutro, para imediatamente
-        if (normalizada_interpolada == VELOCIDADE_NEUTRA) {
-            break;
-        }
-    }
-
-    // GARANTIR PARADA COMPLETA NO PONTO NEUTRO
-    setar_velocidade_normalizada(VELOCIDADE_NEUTRA);
-    
-    // Pequena pausa para estabilização final
-    vTaskDelay(pdMS_TO_TICKS(50));
-
-    printf("✅ Motor desacelerado e em posição neutra (%u)\n", VELOCIDADE_NEUTRA);
 }
 
 void alterar_velocidade(uint32_t nova_velocidade)

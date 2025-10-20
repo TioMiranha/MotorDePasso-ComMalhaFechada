@@ -35,14 +35,13 @@ void resetar_amortecedor(uint16_t valor_inicial) {
 }
 
 void configurar_amortecedor(float factor) {
-    if (factor < 0.05f) factor = 0.05f;  // Mínimo 5% de suavização
-    if (factor > 0.8f) factor = 0.8f;    // Máximo 80% de suavização
+    if (factor < 0.05f) factor = 0.05f;  
+    if (factor > 0.8f) factor = 0.8f;    
     
     amortecedor_factor = factor;
     printf("🎛️  Amortecedor configurado: %.2f\n", factor);
 }
 
-// Função para obter o último valor do amortecedor (para debug)
 uint16_t obter_ultimo_valor_amortecedor() {
     return ultimo_valor_normalizado;
 }

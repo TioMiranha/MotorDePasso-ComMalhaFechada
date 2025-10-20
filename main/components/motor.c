@@ -12,7 +12,6 @@ void tarefa_girar_motor(void *param)
 
     while (motor_ligado)
     {
-        // 🔥 CORREÇÃO CRÍTICA: Resetar watchdog a cada 100ms no máximo
         if ((xTaskGetTickCount() - ultimo_watchdog_reset) * portTICK_PERIOD_MS > 100)
         {
             esp_task_wdt_reset();
@@ -99,7 +98,8 @@ void iniciar_rotacao()
         return;
     }
 
-    uint32_t vel_atual = 2000;
+    uint32_t vel_atual = 0;
+    velocidade_pps = converter_pps_para_normalizada(2000, direcao_atual);
     if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
     {
         vel_atual = velocidade_pps;
@@ -109,7 +109,6 @@ void iniciar_rotacao()
     printf("Motor girando @ %u PPS\n", vel_atual);
 }
 
-// Para rotação contínua
 void parar_rotacao()
 {
     motor_ligado = 0;

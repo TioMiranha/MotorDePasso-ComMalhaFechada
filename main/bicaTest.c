@@ -87,7 +87,7 @@ void app_main()
                 break;
 
             case '2':
-                desacelerar_e_desligar();
+                parar_rotacao();
                 break;
 
             case '3':
