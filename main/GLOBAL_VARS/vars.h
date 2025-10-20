@@ -24,4 +24,8 @@ extern uint8_t ultimo_valor_normalizado;
 extern const char *TAG;
 
 extern uint16_t velocidade_normalizada;
+
+extern TaskHandle_t tarefa_encoder;
+extern volatile int encoder_ativo;
+extern SemaphoreHandle_t xMutexEncoder;
 #endif

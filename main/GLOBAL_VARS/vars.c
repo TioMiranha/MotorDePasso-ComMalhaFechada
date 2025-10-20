@@ -25,3 +25,8 @@ float amortecedor_factor = 0.2f;
 uint32_t ultimo_pps = 0;
 uint8_t ultimo_valor_normalizado = VELOCIDADE_NEUTRA;
 uint16_t velocidade_normalizada = VELOCIDADE_NEUTRA;
+
+// Tarefa do Encoder
+volatile int encoder_ativo = 0;
+TaskHandle_t tarefa_encoder = NULL;
+SemaphoreHandle_t xMutexEncoder;

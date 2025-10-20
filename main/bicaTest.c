@@ -42,7 +42,7 @@ void mostrar_menu()
     printf("│ C → Mover TRÁS rápido           │\n");
     printf("│ D → Mover TRÁS suave            │\n");
     printf("│ E → Parar movimento             |\n");
-    printf("│ F → Mover Trás                  |\n");
+    printf("│ F → Loop do encoder             |\n");
     printf("│ G → Mover Frente                |\n");
     printf("│ 0 → Sair                        │\n");
     printf("└─────────────────────────────────┘\n");
@@ -55,11 +55,14 @@ void app_main()
 
     configurar_gpio();
     configurar_rmt();
+    configurar_pcnt();
     // inicializar_sistema_watchdog(); // desabilitando saporra
+    inicializar_sistema();
     esp_task_wdt_init(5, true); // 5 segundos
     esp_task_wdt_add(NULL);     // Para tarefa IDLE
 
     xTaskCreate(tarefa_girar_motor, "MotorTask", 4096, NULL, 2, &tarefa_motor);
+    xTaskCreate(loop_do_encoder, "EncoderTask", 4096, NULL, 5, &tarefa_encoder);
 
     printf("\n🔧 CONFIGURAÇÃO RMT OTIMIZADA:\n");
     printf("   • Frequência RMT: 1 MHz (1 tick = 1µs)\n");
@@ -173,7 +176,7 @@ void app_main()
             case 'F':
             case 'f':
             {
-                movimento_continuo(0);
+                
                 break;
             }
 

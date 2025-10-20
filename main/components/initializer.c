@@ -56,3 +56,41 @@ void configurar_gpio()
         printf("Mutex de movimento criado\n");
     }
 }
+
+void configurar_pcnt()
+{
+    pcnt_config_t pcnt_config = {
+        .pulse_gpio_num = ENCODER_A_PIN,
+        .ctrl_gpio_num = ENCODER_B_PIN,
+        .lctrl_mode = PCNT_MODE_REVERSE, // Inverte sentido se B estiver em nível baixo
+        .hctrl_mode = PCNT_MODE_KEEP,    // Mantém contagem se B estiver em nível alto
+        .pos_mode = PCNT_COUNT_INC,      // Incrementa quando A sobe
+        .neg_mode = PCNT_COUNT_DEC,      // Decrementa quando A desce
+        .counter_h_lim = PCNT_H_LIM,     // Limite fisico do hardware +
+        .counter_l_lim = PCNT_L_LIM,     // Limite fisico do hardware -
+        .unit = PCNT_ENCODER_UNIT,
+        .channel = PCNT_CHANNEL_0,
+    };
+
+    pcnt_unit_config(&pcnt_config);
+
+    pcnt_counter_pause(PCNT_ENCODER_UNIT);
+    pcnt_counter_clear(PCNT_ENCODER_UNIT);
+    pcnt_counter_resume(PCNT_ENCODER_UNIT);
+
+    pcnt_event_enable(PCNT_ENCODER_UNIT, PCNT_EVT_H_LIM);
+    pcnt_event_enable(PCNT_ENCODER_UNIT, PCNT_EVT_L_LIM);
+
+    pcnt_isr_service_install(0);
+    pcnt_isr_handler_add(PCNT_ENCODER_UNIT, lida_com_os_limites_pcnt, NULL);
+
+     xMutexEncoder = xSemaphoreCreateMutex();
+    if (xMutexEncoder == NULL)
+    {
+        printf("Erro ao criar mutex de movimento!\n");
+    }
+    else
+    {
+        printf("Mutex de movimento criado\n");
+    }
+}

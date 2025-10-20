@@ -5,5 +5,6 @@
 
 void configurar_rmt();
 void configurar_gpio();
+void configurar_pcnt();
 
 #endif

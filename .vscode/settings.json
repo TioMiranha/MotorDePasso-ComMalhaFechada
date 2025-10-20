@@ -2,7 +2,10 @@
     "files.associations": {
         "bicainclude.h": "c",
         "cstdint": "c",
-        "st_direcaomotor.h": "c"
+        "st_direcaomotor.h": "c",
+        "compare": "c",
+        "stdio.h": "c",
+        "home.h": "c"
     },
     "idf.port": "/dev/ttyUSB0",
     "idf.flashType": "UART"
