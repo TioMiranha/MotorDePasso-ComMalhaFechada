@@ -188,7 +188,6 @@ void tarefa_movimento_controlado(void *param)
 
 void mover_frente(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_t tempo_total_ms)
 {
-    // 🔒 CORREÇÃO: Verificações mais robustas
     if (motor_ligado)
     {
         printf("Pare a rotação contínua primeiro! (Opção 2)\n");
@@ -207,7 +206,6 @@ void mover_frente(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_
         return;
     }
 
-    // 🔒 CORREÇÃO: Validar parâmetros
     if (distancia_passos == 0 || velocidade_maxima == 0 || tempo_total_ms == 0)
     {
         printf("Parâmetros inválidos!\n");
@@ -229,7 +227,6 @@ void mover_frente(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_
     movimento_em_andamento = 1;
     xSemaphoreGive(xMutexMovimento);
 
-    // 🔒 CORREÇÃO: Alocar memória para parâmetros
     uint32_t *parametros = malloc(4 * sizeof(uint32_t));
     if (parametros == NULL)
     {
@@ -241,9 +238,8 @@ void mover_frente(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_
     parametros[0] = distancia_passos;
     parametros[1] = velocidade_maxima;
     parametros[2] = tempo_total_ms;
-    parametros[3] = DIRECAO_HORARIA; // 0 = frente
+    parametros[3] = DIRECAO_HORARIA;
 
-    // Criar tarefa de movimento
     if (xTaskCreate(tarefa_movimento_controlado, "MovimentoTask", 4096, parametros, 4, &tarefa_movimento) != pdPASS)
     {
         printf("Erro ao criar tarefa de movimento!\n");
@@ -257,7 +253,6 @@ void mover_frente(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_
 
 void mover_tras(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_t tempo_total_ms)
 {
-    // Mesmas verificações do mover_frente
     if (motor_ligado)
     {
         printf("Pare a rotação contínua primeiro! (Opção 2)\n");
@@ -307,7 +302,7 @@ void mover_tras(uint32_t distancia_passos, uint32_t velocidade_maxima, uint32_t 
     parametros[0] = distancia_passos;
     parametros[1] = velocidade_maxima;
     parametros[2] = tempo_total_ms;
-    parametros[3] = DIRECAO_ANTI_HORARIA; // 1 = trás
+    parametros[3] = DIRECAO_ANTI_HORARIA;
 
     if (xTaskCreate(tarefa_movimento_controlado, "MovimentoTask", 4096, parametros, 4, &tarefa_movimento) != pdPASS)
     {
@@ -363,36 +358,79 @@ void executar_mover_tras_devagar()
 
 void movimento_continuo(int direcao)
 {
-    if (motor_ligado && direcao_atual == direcao)
-    {
+    // Verifica se o home foi realizado para movimentos normais
+    if (direcao != 0 && direcao != 1 && !home_finalizado_com_sucesso()) {
+        printf("⚠️  Execute o HOME primeiro antes de movimentos normais\n");
         return;
     }
 
-    // Se motor está ligado mas em direção diferente, para e reinicia
+    if (motor_ligado && direcao_atual == direcao)
+    {
+        printf("ℹ️  Motor já está movendo na mesma direção\n");
+        return;
+    }
+
+    if (motor_ligado)
+    {
+        printf("🔄 Alterando direção...\n");
+        parar_rotacao();
+        vTaskDelay(pdMS_TO_TICKS(100)); // Aumentei para garantir parada completa
+    }
+
+    gpio_set_level(DIR_PIN, direcao);
+    direcao_atual = direcao;
+
+    if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
+    {
+        // Velocidade padrão para operação normal
+        velocidade_pps = 2000;
+        xSemaphoreGive(xMutexVelocidade);
+    }
+
+    motor_ligado = 1;
+
+    if (tarefa_motor == NULL)
+    {
+        xTaskCreate(tarefa_girar_motor, "MotorTask", 4096, NULL, 3, &tarefa_motor);
+    }
+
+    const char* direcao_str = (direcao == DIRECAO_HORARIA) ? "▶ FRENTE" : "◀ TRÁS";
+    printf("%s: MOVIMENTO CONTÍNUO a %u PPS\n", direcao_str, velocidade_pps);
+}
+
+// Nova função para home com velocidade controlada
+void movimento_continuo_home(int direcao, uint32_t velocidade)
+{
+    printf("🏠 MOVIMENTO HOME: Direção %s a %u PPS\n", 
+           (direcao == DIRECAO_HORARIA) ? "HORÁRIA" : "ANTI-HORÁRIA", 
+           velocidade);
+
+    if (motor_ligado && direcao_atual == direcao)
+    {
+        // Apenas atualiza a velocidade se já está na mesma direção
+        alterar_velocidade_suave(velocidade);
+        return;
+    }
+
     if (motor_ligado)
     {
         parar_rotacao();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-    // Configurar direção
     gpio_set_level(DIR_PIN, direcao);
     direcao_atual = direcao;
 
-    // Iniciar rotação
     if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
     {
-        velocidade_pps = 2000; // Velocidade padrão para movimento contínuo
+        velocidade_pps = velocidade;
         xSemaphoreGive(xMutexVelocidade);
     }
 
     motor_ligado = 1;
 
-    // Criar tarefa de rotação se não existir
     if (tarefa_motor == NULL)
     {
         xTaskCreate(tarefa_girar_motor, "MotorTask", 4096, NULL, 3, &tarefa_motor);
     }
-
-    printf("%s: MOVIMENTO CONTÍNUO\n", direcao == DIRECAO_HORARIA ? "▶ FRENTE" : "◀ TRÁS");
 }

@@ -11,12 +11,15 @@
 #include "driver/pcnt.h"
 #include "esp_log.h"
 #include "esp_task_wdt.h"
+#include "driver/timer.h"
 #include <math.h>
 // Variáveis globais
 #include ".././GLOBAL_VARS/vars.h"
 
 //Structs
 #include "../structs/ST_direcaoMotor.h"
+#include "../structs/ST_home.h"
+#include "../structs/ST_movimentoEncoder.h"
 
 // funções
 #include ".././functions/initializersFunctions.h"
@@ -27,6 +30,7 @@
 #include ".././functions/rampas.h"
 #include ".././functions/velocidade.h"
 #include ".././functions/home.h"
+#include ".././functions/movimentoEncoder.h"
 #include ".././functions/motion.h"
 
 // Configurações do motor

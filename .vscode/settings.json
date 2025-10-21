@@ -5,7 +5,9 @@
         "st_direcaomotor.h": "c",
         "compare": "c",
         "stdio.h": "c",
-        "home.h": "c"
+        "home.h": "c",
+        "velocidade.h": "c",
+        "st_home.h": "c"
     },
     "idf.port": "/dev/ttyUSB0",
     "idf.flashType": "UART"

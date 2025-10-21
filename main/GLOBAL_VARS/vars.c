@@ -30,3 +30,8 @@ uint16_t velocidade_normalizada = VELOCIDADE_NEUTRA;
 volatile int encoder_ativo = 0;
 TaskHandle_t tarefa_encoder = NULL;
 SemaphoreHandle_t xMutexEncoder;
+volatile int32_t posicao_acumulada = 0;
+SemaphoreHandle_t xMutexHome = NULL;
+home_control_t home_control;
+
+bool home_encontrado = false;

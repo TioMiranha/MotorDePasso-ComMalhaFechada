@@ -99,7 +99,7 @@ void iniciar_rotacao()
     }
 
     uint32_t vel_atual = 0;
-    velocidade_pps = converter_pps_para_normalizada(2000, direcao_atual);
+    velocidade_pps = converter_pps_para_normalizada(1000, direcao_atual);
     if (xSemaphoreTake(xMutexVelocidade, portMAX_DELAY) == pdTRUE)
     {
         vel_atual = velocidade_pps;

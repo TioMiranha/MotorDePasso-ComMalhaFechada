@@ -82,7 +82,10 @@ void configurar_pcnt()
     pcnt_event_enable(PCNT_ENCODER_UNIT, PCNT_EVT_L_LIM);
 
     pcnt_isr_service_install(0);
-    pcnt_isr_handler_add(PCNT_ENCODER_UNIT, lida_com_os_limites_pcnt, NULL);
+    
+    pcnt_counter_pause(PCNT_ENCODER_UNIT);
+    pcnt_counter_clear(PCNT_ENCODER_UNIT);
+    pcnt_counter_resume(PCNT_ENCODER_UNIT);
 
      xMutexEncoder = xSemaphoreCreateMutex();
     if (xMutexEncoder == NULL)
@@ -94,3 +97,4 @@ void configurar_pcnt()
         printf("Mutex de movimento criado\n");
     }
 }
+

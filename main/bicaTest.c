@@ -41,9 +41,11 @@ void mostrar_menu()
     printf("│ B → Mover FRENTE rapido         │\n");
     printf("│ C → Mover TRÁS rápido           │\n");
     printf("│ D → Mover TRÁS suave            │\n");
-    printf("│ E → Parar movimento             |\n");
-    printf("│ F → Loop do encoder             |\n");
-    printf("│ G → Mover Frente                |\n");
+    printf("│ E → Parar movimento             │\n");
+    printf("│ F → HOME ROBUSTO (3 fases)      │\n");
+    printf("│ G → Status do Home              │\n");
+    printf("│ H → Parar Home (emergência)     │\n");
+    printf("│ I → Reset Sistema               │\n");
     printf("│ 0 → Sair                        │\n");
     printf("└─────────────────────────────────┘\n");
     printf("Opção: ");
@@ -52,17 +54,21 @@ void mostrar_menu()
 void app_main()
 {
     printf("Iniciando controle de motor passo com RMT\n");
+    xMutexEncoder = xSemaphoreCreateMutex();
 
     configurar_gpio();
     configurar_rmt();
     configurar_pcnt();
-    // inicializar_sistema_watchdog(); // desabilitando saporra
-    inicializar_sistema();
+    pca9555_init();
+    // Inicialização do sistema de home
+    inicia_fim_de_curso(); // Adicione esta linha!
+
+    // home_init(); // Remove ou substitui pela nova inicialização
+
     esp_task_wdt_init(5, true); // 5 segundos
     esp_task_wdt_add(NULL);     // Para tarefa IDLE
 
     xTaskCreate(tarefa_girar_motor, "MotorTask", 4096, NULL, 2, &tarefa_motor);
-    xTaskCreate(loop_do_encoder, "EncoderTask", 4096, NULL, 5, &tarefa_encoder);
 
     printf("\n🔧 CONFIGURAÇÃO RMT OTIMIZADA:\n");
     printf("   • Frequência RMT: 1 MHz (1 tick = 1µs)\n");
@@ -70,11 +76,15 @@ void app_main()
     printf("   • Velocidade atual: %u PPS\n", velocidade_pps);
     printf("   • Range: 10 - 50.000 PPS\n");
     printf("   • Rampas suaves com atualização a cada 10ms\n");
+
     direcao_atual = DIRECAO_HORARIA;
     char opcao[10];
     gpio_set_level(DIR_PIN, direcao_atual);
     printf("   • Direção inicial: %s\n",
            direcao_atual == DIRECAO_HORARIA ? "HORÁRIA" : "ANTI-HORÁRIA");
+
+    // Estado do sistema
+    bool sistema_pronto = false;
 
     while (1)
     {
@@ -86,7 +96,14 @@ void app_main()
             switch (opcao[0])
             {
             case '1':
-                iniciar_rotacao();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    iniciar_rotacao();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
 
             case '2':
@@ -130,11 +147,25 @@ void app_main()
             }
 
             case '6':
-                executar_rampa_trapezoidal_rapida();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_rampa_trapezoidal_rapida();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
 
             case '7':
-                executar_desaceleracao_trapezoidal_muito_rapida();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_desaceleracao_trapezoidal_muito_rapida();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
 
             case '8':
@@ -147,49 +178,99 @@ void app_main()
 
             case 'A':
             case 'a':
-                executar_mover_frente_rapido();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_mover_frente_rapido();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
+
             case 'B':
             case 'b':
-                executar_mover_frente_devagar();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_mover_frente_devagar();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
 
             case 'C':
             case 'c':
-                executar_mover_tras_rapido();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_mover_tras_rapido();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
 
             case 'D':
             case 'd':
-            {
-                executar_mover_tras_devagar();
+                if (sistema_pronto || home_finalizado_com_sucesso())
+                {
+                    executar_mover_tras_devagar();
+                }
+                else
+                {
+                    printf("⚠️  Execute o HOME primeiro (Opção F)\n");
+                }
                 break;
-            }
 
             case 'E':
             case 'e':
-            {
                 parar_movimento();
                 break;
-            }
 
             case 'F':
             case 'f':
-            {
-                
+                printf("🚀 Iniciando sequência de HOME...\n");
+                iniciar_home_robusto();
+                sistema_pronto = true;
                 break;
-            }
 
             case 'G':
             case 'g':
             {
-                movimento_continuo(1);
+                if (home_finalizado_com_sucesso())
+                {
+                    printf("✅ HOME concluído com SUCESSO\n");
+                    printf("📊 Posição absoluta: %d\n", posicao_acumulada);
+                }
+                else
+                {
+                    printf("❌ HOME não executado ou falhou\n");
+                }
                 break;
             }
+
+            case 'H':
+            case 'h':
+                printf("🛑 Parando HOME (emergência)\n");
+                parar_home();
+                break;
+
+            case 'I':
+            case 'i':
+                printf("🔄 Resetando sistema...\n");
+                parar_movimento();
+                parar_home();
+                sistema_pronto = false;
+                home_encontrado = false;
+                printf("✅ Sistema resetado\n");
+                break;
 
             case '0':
                 printf("\n👋 Saindo...\n");
                 parar_rotacao();
+                parar_home();
                 gpio_set_level(ENABLE_PIN, 1);
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 return;

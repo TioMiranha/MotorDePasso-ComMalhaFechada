@@ -1,27 +1,54 @@
 #include "../functions/home.h"
 #include <stdio.h>
 
-// Variáveis globais
-home_control_t home_control = {
-    .state = HOME_IDLE,
-    .home_found = false,
-    .home_position = 0,
-    .start_time = 0,
-    .homing_in_progress = false
-};
+gpio_config_t fimDeCurso;
 
-SemaphoreHandle_t xMutexHome = NULL;
+void IRAM_ATTR encoder_overflow_isr(void *arg) {
+    uint32_t status;
+    pcnt_get_event_status(PCNT_ENCODER_UNIT, &status);
+    
+    if (xSemaphoreTakeFromISR(xMutexEncoder, NULL) == pdTRUE) {
+        if (status & PCNT_EVT_H_LIM) {
+            posicao_acumulada += 32768;
+            pcnt_counter_clear(PCNT_ENCODER_UNIT);
+        } else if (status & PCNT_EVT_L_LIM) {
+            posicao_acumulada -= 32768;
+            pcnt_counter_clear(PCNT_ENCODER_UNIT);
+        }
+        xSemaphoreGiveFromISR(xMutexEncoder, NULL);
+    }
+}
 
-// Inicialização do sistema de home
+int32_t encoder_get_position(void) {
+    int32_t posicao_total = 0;
+    int16_t count_atual;
+    
+    if (xSemaphoreTake(xMutexEncoder, portMAX_DELAY) == pdTRUE) {
+        pcnt_get_counter_value(PCNT_ENCODER_UNIT, &count_atual);
+        posicao_total = posicao_acumulada + (int32_t)count_atual;
+        xSemaphoreGive(xMutexEncoder);
+    }
+    
+    return posicao_total;
+}
+
+void encoder_reset_position(void) {
+    if (xSemaphoreTake(xMutexEncoder, portMAX_DELAY) == pdTRUE) {
+        posicao_acumulada = 0;
+        pcnt_counter_clear(PCNT_ENCODER_UNIT);
+        xSemaphoreGive(xMutexEncoder);
+    }
+}
+
 void home_init(void) {
     // Criar mutex
     if (xMutexHome == NULL) {
         xMutexHome = xSemaphoreCreateMutex();
     }
-    
+        
     // Configurar GPIO do fim de curso
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << HOME_SWITCH_GPIO),
+        .pin_bit_mask = (1ULL << FIM_DE_CURSO_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,    // Assumindo fim de curso ativo em LOW
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -29,123 +56,15 @@ void home_init(void) {
     };
     gpio_config(&io_conf);
     
-    printf("✅ Sistema de Home inicializado - Fim de curso: GPIO %d\n", HOME_SWITCH_GPIO);
+    printf("✅ Sistema de Home inicializado\n");
+    printf("   - Fim de curso: GPIO %d\n", FIM_DE_CURSO_PIN);
+    printf("   - Encoder: A=GPIO%d, B=GPIO%d\n", ENCODER_A_PIN, ENCODER_B_PIN);
 }
 
 // Verifica se o fim de curso está ativado
 bool home_switch_activated(void) {
-    return gpio_get_level(HOME_SWITCH_GPIO) == 0; // Ajuste conforme seu hardware
+    return gpio_get_level(FIM_DE_CURSO_PIN) == 0; // Ajuste conforme seu hardware
 }
-
-void doMotion(u8 axis_num,u8t dir) {
-	float tempAccel;
-	float tempMaxSpeed;
-	float t;
-	int32_t distToTarget;
-	int32_t accelDist;
-
-	distToTarget = abs(axis[axis_num].targetLocation - axis[axis_num].currentLocation); // figure out the distance we will travel on this move
-
-	tempAccel =axis[axis_num].moveAccelSteps; // * stepsInch; // in steps per sec
-	tempAccel = tempAccel / (ENGINE_RATE * ENGINE_RATE);
-	tempAccel = tempAccel * SPEED_OFFSET;
-	axis[axis_num].accel = (int32_t) tempAccel;
-
-	tempMaxSpeed = axis[axis_num].moveMaxSpeedSteps;
-	tempMaxSpeed = (tempMaxSpeed / ENGINE_RATE) * SPEED_OFFSET;
-	axis[axis_num].maxSpeed = (int32_t) tempMaxSpeed;
-
-	//determine Accel distance
-	//     d = 1/2 a t^2
-	t = (float) axis[axis_num].moveMaxSpeedSteps / (float) axis[axis_num].moveAccelSteps;
-	accelDist = (axis[axis_num].moveAccelSteps / 2) * t * t;
-
-	// determine the direction
-	if (axis[axis_num].targetLocation > axis[axis_num].currentLocation) {
-		axis[axis_num].motionDirection = DIRECTION_FORWARD;
-
-	    if(!axis[axis_num].flg_zrn){
-			gpio_set_level(_SAIDAS_Y[dir],1);// determina direção horario
-			SET_Y(dir);// determina direção horario anti-horaro
-	    }
-
-
-		axis[axis_num].decelLocation = axis[axis_num].currentLocation + axis[axis_num].decelLocation;
-
-
-		if (accelDist >= distToTarget / 2)
-			axis[axis_num].decelLocation = axis[axis_num].targetLocation - distToTarget / 2;
-		else
-			axis[axis_num].decelLocation = axis[axis_num].targetLocation - accelDist;
-
-	} else {
-		axis[axis_num].motionDirection = DIRECTION_REVERSE;
-
-         if(!axis[axis_num].flg_zrn){
-    		 gpio_set_level(_SAIDAS_Y[dir],0);// determina direção  ANTI-horario
-    	     CLR_Y(dir);// determina direção horario anti-horaro
-
-         }
-
-
-		axis[axis_num].decelLocation = axis[axis_num].currentLocation - axis[axis_num].decelLocation;
-
-		if (accelDist >= distToTarget / 2)
-			axis[axis_num].decelLocation = axis[axis_num].targetLocation + distToTarget / 2;
-		else
-			axis[axis_num].decelLocation = axis[axis_num].targetLocation + accelDist;
-
-	}
-
-	esp_rom_delay_us(4);
-
-    if(axis_num == 0)	init_rmt_motor0();
-    if(axis_num == 1)	init_rmt_motor1();
-
-	axis[axis_num].bDecel = false;
-	axis[axis_num].currentSpeed = 0; // initialize this
-	axis[axis_num].bEnableMotion = true; // all set time to move
-	axis[axis_num].ativo =true;
-	HabilitaTimer();
-}
-
-int32_t MotorControlAbs(u8 axis_num ,int32_t position, u32 ramp, u32 rpm, u8t  dir ) {
-	    u32 rampa;
-	if (!axis[axis_num].bEnableMotion) {
-		if(ramp <= 100 )ramp = 10;// se rampa for zero add 100 limite mimino de rampa
-		if(ramp > 10000 )ramp = 10000;// se rampa for zero add 100 limite mimino de rampa
-		rampa =(u32) Scale(ramp, 100,10000, 10000, 100);
-		axis[axis_num].moveAccelSteps = rampa; //rampa
-		if(rpm > LIMITE_MAX_FREQ  )rpm = LIMITE_MAX_FREQ ; // limita frequencia proteção
-		if(rpm < 1 )rpm = 10;
-		axis[axis_num].moveMaxSpeedSteps = rpm; // velocidade;
-		axis[axis_num].targetLocation = position ;
-	//	if(dir > 8 )dir = 8;//  definição para o maximo numero de eixos 4 eixos
-		doMotion(axis_num, dir );
-	}
-	return axis[axis_num].currentLocation;
-
-} 
-
-int32_t MotorControlRel(u8 axis_num ,int32_t position, u32 ramp, u32 rpm, u8t dir ) {
-
-	  u32 rampa;
-
-	if (!axis[axis_num].bEnableMotion) {
-		if(ramp <= 100 )ramp = 10;// se rampa for zero add 100 limite mimino de rampa
-		if(ramp >= 10000 )ramp = 10000;// se rampa for zero add 100 limite mimino de rampa
-		rampa =(u32) Scale(ramp, 100,10000, 10000, 100);
-		axis[axis_num].moveAccelSteps = rampa; //rampa
-		if(rpm > LIMITE_MAX_FREQ  )rpm = LIMITE_MAX_FREQ ;// limita frequencia maxima proteção
-		if(rpm < 1 )rpm = 10;// limita frequencia minima proteção
-		axis[axis_num].moveMaxSpeedSteps = rpm; // velocidade;
-		axis[axis_num].targetLocation = position;
-		axis[axis_num].currentLocation = 0;// MODO RELAITO A POISÇÃO ATUAL É ZERADA
-		//if(dir > 8 )dir = 8;// definição para o maximo numero de eixos 4 eixos
-		doMotion(axis_num,dir);
-	}
-	return axis[axis_num].currentLocation;
-} 
 
 // Inicia sequência de home
 bool home_start(void) {
@@ -162,6 +81,7 @@ bool home_start(void) {
         home_control.home_found = false;
         
         printf("🏠 INICIANDO SEQUÊNCIA DE HOME\n");
+        printf("   Posição inicial do encoder: %d\n", encoder_get_position());
         xSemaphoreGive(xMutexHome);
         return true;
     }
@@ -173,7 +93,7 @@ void home_stop(void) {
     if (xSemaphoreTake(xMutexHome, portMAX_DELAY)) {
         home_control.state = HOME_IDLE;
         home_control.homing_in_progress = false;
-        MotorStop(0); // Para o motor no eixo 0
+        parar_movimento(); // Para o motor no eixo 0
         xSemaphoreGive(xMutexHome);
         printf("🛑 Home interrompido\n");
     }
@@ -181,7 +101,7 @@ void home_stop(void) {
 
 // Verifica se home está completo
 bool home_is_complete(void) {
-    bool complete;
+    bool complete = false;
     if (xSemaphoreTake(xMutexHome, portMAX_DELAY)) {
         complete = (home_control.state == HOME_COMPLETE);
         xSemaphoreGive(xMutexHome);
@@ -191,7 +111,7 @@ bool home_is_complete(void) {
 
 // Verifica se home está em andamento
 bool home_is_homing(void) {
-    bool homing;
+    bool homing = false;
     if (xSemaphoreTake(xMutexHome, portMAX_DELAY)) {
         homing = home_control.homing_in_progress;
         xSemaphoreGive(xMutexHome);
@@ -201,14 +121,14 @@ bool home_is_homing(void) {
 
 // Obtém posição de home
 int32_t home_get_position(void) {
-    int32_t position;
+    int32_t position = 0;
     if (xSemaphoreTake(xMutexHome, portMAX_DELAY)) {
         position = home_control.home_position;
         xSemaphoreGive(xMutexHome);
     }
     return position;
 }
-
+/*
 // Tarefa principal do home
 void home_task(void *pvParameters) {
     printf("🔧 Tarefa de Home iniciada\n");
@@ -219,10 +139,10 @@ void home_task(void *pvParameters) {
                 
                 case HOME_FAST_SEARCH: {
                     printf("🔍 FASE 1: Busca rápida do home\n");
+                    printf("   Posição atual: %d\n", encoder_get_position());
                     
                     // Mover na direção negativa para buscar home
-                    // Usando eixo 0 fixo e direção 1 (ajuste conforme seu hardware)
-                    MotorControlRel(0, -1000000, HOMING_ACCEL, HOMING_FAST_SPEED, 1);
+                    // Ajuste a direção (1 ou 0) conforme seu hardware
                     
                     // Aguardar até encontrar fim de curso ou timeout
                     uint32_t current_time = xTaskGetTickCount();
@@ -231,7 +151,8 @@ void home_task(void *pvParameters) {
                         
                         if (home_switch_activated()) {
                             printf("🎯 Fim de curso encontrado na busca rápida!\n");
-                            MotorStop(0);
+                            printf("   Posição do encoder: %d\n", encoder_get_position());
+                            parar_movimento();
                             vTaskDelay(pdMS_TO_TICKS(100));
                             home_control.state = HOME_BACK_OFF;
                             break;
@@ -256,10 +177,9 @@ void home_task(void *pvParameters) {
                 
                 case HOME_BACK_OFF: {
                     printf("🔄 FASE 2: Recuando do fim de curso\n");
+                    printf("   Posição atual: %d\n", encoder_get_position());
                     
-                    // Recuar na direção positiva
-                    MotorControlRel(0, 2000, HOMING_ACCEL, HOMING_SLOW_SPEED, 1);
-                    
+                    // Recuar na direção positiva                    
                     // Aguardar movimento completar ou sair do fim de curso
                     uint32_t backoff_start = xTaskGetTickCount();
                     while (home_control.state == HOME_BACK_OFF && 
@@ -267,7 +187,8 @@ void home_task(void *pvParameters) {
                         
                         if (!home_switch_activated()) {
                             printf("✅ Saiu do fim de curso\n");
-                            MotorStop(0);
+                            printf("   Posição do encoder: %d\n", encoder_get_position());
+                            parar_movimento();
                             vTaskDelay(pdMS_TO_TICKS(100));
                             home_control.state = HOME_SLOW_SEARCH;
                             break;
@@ -289,9 +210,9 @@ void home_task(void *pvParameters) {
                 
                 case HOME_SLOW_SEARCH: {
                     printf("🎯 FASE 3: Busca lenta final\n");
+                    printf("   Posição atual: %d\n", encoder_get_position());
                     
                     // Mover lentamente para encontrar home com precisão
-                    MotorControlRel(0, -1000, HOMING_ACCEL, HOMING_SLOW_SPEED / 2, 1);
                     
                     uint32_t slow_start = xTaskGetTickCount();
                     while (home_control.state == HOME_SLOW_SEARCH && 
@@ -299,13 +220,13 @@ void home_task(void *pvParameters) {
                         
                         if (home_switch_activated()) {
                             printf("🎯 Home encontrado com precisão!\n");
-                            MotorStop(0);
+                            parar_movimento();
                             vTaskDelay(pdMS_TO_TICKS(100));
                             
-                            // ZERAR POSIÇÃO ABSOLUTA
-                            // Usando sua função existente para zerar a posição
+                            // ZERAR POSIÇÃO ABSOLUTA NO ENCODER
+                            encoder_reset_position();
+                            
                             if (xSemaphoreTake(xMutexHome, portMAX_DELAY)) {
-                                axis[0].currentLocation = 0;  // Zera a posição do motor
                                 home_control.home_position = 0;
                                 home_control.home_found = true;
                                 home_control.state = HOME_COMPLETE;
@@ -335,13 +256,15 @@ void home_task(void *pvParameters) {
                 case HOME_COMPLETE: {
                     home_control.homing_in_progress = false;
                     printf("✅ Sequência de home finalizada com sucesso\n");
+                    printf("   Posição final do encoder: %d\n", encoder_get_position());
                     break;
                 }
                 
                 case HOME_ERROR: {
-                    MotorStop(0);
+                    parar_movimento();
                     home_control.homing_in_progress = false;
                     printf("❌ Erro na sequência de home\n");
+                    printf("   Posição final do encoder: %d\n", encoder_get_position());
                     break;
                 }
                 
@@ -353,3 +276,4 @@ void home_task(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(50)); // Executar a 20Hz
     }
 }
+*/

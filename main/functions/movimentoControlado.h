@@ -12,6 +12,8 @@ void executar_mover_frente_devagar();
 void executar_mover_tras_rapido();
 void executar_mover_tras_devagar();
 void movimento_continuo(int direcao);
+void movimento_continuo_home(int direcao, uint32_t velocidade);
+void movimento_controlado(int direcao, uint32_t velocidade);
 
 
 #endif
